@@ -1,0 +1,5 @@
+# Ignore all folders except GPX converter Ds
+/*
+!GPX converter Ds/
+!.gitignore
+!.git
