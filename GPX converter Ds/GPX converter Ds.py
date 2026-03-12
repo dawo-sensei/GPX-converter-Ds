@@ -1,7 +1,7 @@
 import os
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
-from lxml import etree
+from xml import etree
 
 def kml_to_gpx(kml_file, gpx_file):
     """
