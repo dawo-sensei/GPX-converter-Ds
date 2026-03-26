@@ -1,7 +1,8 @@
 import os
+import sys
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
-from xml import etree
+import xml.etree.ElementTree as ET
 
 def kml_to_gpx(kml_file, gpx_file):
     """
@@ -13,48 +14,55 @@ def kml_to_gpx(kml_file, gpx_file):
             kml_content = file.read()
         
         # Parse the KML content with namespace handling
-        kml_tree = etree.fromstring(kml_content.encode('utf-8'))
+        kml_tree = ET.fromstring(kml_content)
         ns = {"kml": "http://www.opengis.net/kml/2.2"}  # Define the KML namespace
-        gpx_tree = etree.Element("gpx", version="1.1", creator="KML to GPX Converter")
-        
+        gpx_tree = ET.Element("gpx", version="1.1", creator="KML to GPX Converter")
+
         # Handle <Point> elements (waypoints)
-        placemarks_with_points = kml_tree.xpath(".//kml:Placemark[kml:Point]", namespaces=ns)
+        placemarks_with_points = kml_tree.findall(".//kml:Placemark", ns)
         for placemark in placemarks_with_points:
-            name = placemark.findtext("kml:name", namespaces=ns)
-            coordinates = placemark.xpath("kml:Point/kml:coordinates", namespaces=ns)
-            if coordinates:
-                coord_text = coordinates[0].text.strip()
+            point = placemark.find("kml:Point", ns)
+            coordinates = placemark.find("kml:Point/kml:coordinates", ns)
+            if point is not None and coordinates is not None and coordinates.text:
+                name = placemark.findtext("kml:name", default="", namespaces=ns)
+                coord_text = coordinates.text.strip()
                 lon, lat, *_ = coord_text.split(",")  # Extract longitude and latitude
-                wpt = etree.SubElement(gpx_tree, "wpt", lat=lat, lon=lon)
+                wpt = ET.SubElement(gpx_tree, "wpt", lat=lat, lon=lon)
                 if name:
-                    etree.SubElement(wpt, "name").text = name
-        
+                    ET.SubElement(wpt, "name").text = name
+
         # Handle <LineString> elements (tracks)
-        placemarks_with_lines = kml_tree.xpath(".//kml:Placemark[kml:LineString]", namespaces=ns)
-        for placemark in placemarks_with_lines:
-            name = placemark.findtext("kml:name", namespaces=ns)
-            coordinates = placemark.xpath("kml:LineString/kml:coordinates", namespaces=ns)
-            if coordinates:
-                coord_text = coordinates[0].text.strip()
+        for placemark in kml_tree.findall(".//kml:Placemark", ns):
+            line_string = placemark.find("kml:LineString", ns)
+            coordinates = placemark.find("kml:LineString/kml:coordinates", ns)
+            if line_string is not None and coordinates is not None and coordinates.text:
+                name = placemark.findtext("kml:name", default="", namespaces=ns)
+                coord_text = coordinates.text.strip()
                 coord_list = coord_text.split()
                 
                 # Create a track in the GPX file
-                trk = etree.SubElement(gpx_tree, "trk")
+                trk = ET.SubElement(gpx_tree, "trk")
                 if name:
-                    etree.SubElement(trk, "name").text = name
-                trkseg = etree.SubElement(trk, "trkseg")
+                    ET.SubElement(trk, "name").text = name
+                trkseg = ET.SubElement(trk, "trkseg")
                 
                 for coord in coord_list:
                     lon, lat, *_ = coord.split(",")
-                    etree.SubElement(trkseg, "trkpt", lat=lat, lon=lon)
+                    ET.SubElement(trkseg, "trkpt", lat=lat, lon=lon)
         
         # Write GPX to file
+        ET.indent(gpx_tree, space="  ")
         with open(gpx_file, 'wb') as file:
-            file.write(etree.tostring(gpx_tree, pretty_print=True, xml_declaration=True, encoding='UTF-8'))
+            file.write(ET.tostring(gpx_tree, xml_declaration=True, encoding='UTF-8'))
         
         print(f"Conversion successful! GPX saved at: {gpx_file}")
     except Exception as e:
         print(f"Error during conversion: {e}")
+
+def get_output_directory():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
 
 def main():
     # Hide the root tkinter window
@@ -71,7 +79,7 @@ def main():
         return
 
     # Get the directory of the script/executable
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    script_dir = get_output_directory()
 
     # Generate the output .gpx file path
     base_name = os.path.splitext(os.path.basename(kml_file))[0]
